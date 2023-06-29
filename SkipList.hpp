@@ -17,7 +17,7 @@ class SkipList<
            std::is_same<decltype(std::declval<K>() != std::declval<K>()),
                         bool>::value>::type> {
   private:
-    const int MAX_LEVEL = 8;
+    const int MAX_LEVEL = 4;
     int nowLevel;
     const float rate = 0.5;
     typedef struct ListNode {
@@ -29,14 +29,6 @@ class SkipList<
         ListNode(int level) : nextList(level, nullptr) {}
     } SNode;
     SNode *head;
-    void find(const K &val, vector<SNode *> &pre) {
-        SNode *p = head;
-        for (int i = nowLevel - 1; i >= 0; --i) {
-            while (p->nextList[i] && p->nextList[i]->val < val)
-                p = p->nextList[i];
-            pre[i] = p;
-        }
-    }
     std::default_random_engine generator;
     std::uniform_int_distribution<int> distribution;
     int randomLevel() {
@@ -46,18 +38,21 @@ class SkipList<
         }
         return level;
     }
-    void add(SNode *newNode) {
-        if (newNode->nextList.size() > nowLevel) {
-            nowLevel = newNode->nextList.size();
-            head->nextList.resize(nowLevel, nullptr);
+    void insert(SNode *newNode) {
+        int newNodeLevel = newNode->nextList.size();
+        if (newNodeLevel > nowLevel) {
+            head->nextList.resize(newNodeLevel, nullptr);
+            nowLevel = newNodeLevel;
         }
         auto current = head;
+        auto &val = newNode->val;
         for (int i = nowLevel - 1; i >= 0; --i) {
-            while (current->nextList[i] != nullptr &&
-                   current->nextList[i]->val < newNode->val) {
+            while (current->nextList[i] && current->nextList[i]->val < val) {
                 current = current->nextList[i];
             }
-            if (i < newNode->nextList.size()) {
+            if (i < newNodeLevel) {
+                if (current->val == val)
+                    return;
                 newNode->nextList[i] = current->nextList[i];
                 current->nextList[i] = newNode;
             }
@@ -68,7 +63,8 @@ class SkipList<
     SkipList() : nowLevel(1), distribution(0, 1) {
         head = new SNode(1);
         std::random_device rd;
-        generator.seed(rd());
+        // generator.seed(rd());
+        generator.seed(1);
     }
     ~SkipList() {
         auto current = head;
@@ -78,38 +74,46 @@ class SkipList<
             current = next;
         }
     }
-    bool search(const K &val) {
-        vector<SNode *> pre(nowLevel);
-        find(val, pre);
-        auto p = pre[0]->nextList[0];
-        return p && p->val == val;
+    void insert(K &&k) {
+        auto newNode = new SNode(std::forward<K>(k), randomLevel());
+        insert(newNode);
     }
-    void add(K &&val) {
-        auto newNode = new SNode(std::forward<K>(val), randomLevel());
-        add(newNode);
+    void insert(const K &k) {
+        auto newNode = new SNode(k, randomLevel());
+        insert(newNode);
     }
-    void add(const K &val) {
-        auto newNode = new SNode(val, randomLevel());
-        add(newNode);
-    }
-
-    bool remove(const K &&val) {
-        vector<SNode *> pre(nowLevel);
-        find(val, pre);
-        auto p = pre[0]->nextList[0];
-        if (!p || p->val != val)
-            return false;
-        for (int i = 0; i < nowLevel && pre[i]->nextList[i] == p; ++i) {
-            pre[i]->nextList[i] = p->nextList[i];
+    bool search(const K &k) {
+        auto current = head;
+        for (int i = nowLevel - 1; i >= 0; --i) {
+            while (current->nextList[i] && current->nextList[i]->val < k) {
+                current = current->nextList[i];
+            }
+            if (current->nextList[i] && current->nextList[i]->val == k) {
+                return true;
+            }
         }
-        delete p;
-        return true;
+        return false;
+    }
+    void remove(const K &k) {
+        auto current = head;
+        SNode* temp=nullptr;
+        for (int i = nowLevel - 1; i >= 0; --i) {
+            while (current->nextList[i] && current->nextList[i]->val < k) {
+                current = current->nextList[i];
+            }
+            if (current->nextList[i] && current->nextList[i]->val == k) {
+                auto node = current->nextList[i];
+                current->nextList[i] = current->nextList[i]->nextList[i];   
+                temp=node;             
+            }
+        }
+        delete temp;
     }
     void print() {
         for (int i = nowLevel - 1; i >= 0; i--) {
             SNode *current = head->nextList[i];
             std::cout << "Level " << i << ": ";
-            while (current != nullptr) {
+            while (current) {
                 std::cout << current->val << " ";
                 current = current->nextList[i];
             }
